@@ -14,24 +14,22 @@ import Button from '../../Common/Button';
 
 import { ExternalLinkIcon } from '../../../assets/icons';
 import useLocales from '../../../hooks/useLocales';
+import useWallet from '../../../hooks/useWallet';
 
 const DownloadApp: React.FC<{
   connectorId: string;
 }> = ({ connectorId }) => {
-  const context = useContext();
-
-  const [id, setId] = useState(connectorId);
-  const connector = supportedConnectors.filter((c) => c.id === id)[0];
+  const { wallet } = useWallet(connectorId);
 
   const locales = useLocales({
-    CONNECTORNAME: connector.name,
+    CONNECTORNAME: wallet?.name,
   });
 
-  if (!connector) return <>Connector not found</>;
+  if (!wallet) return <>Connector not found</>;
 
-  const ios = connector.appUrls?.ios;
-  const android = connector.appUrls?.android;
-  const downloadUri = connector.appUrls?.download;
+  const ios = wallet?.downloadUrls?.ios;
+  const android = wallet?.downloadUrls?.android;
+  const downloadUri = wallet?.downloadUrls?.download;
   const bodycopy =
     ios && android
       ? locales.downloadAppScreen_iosAndroid
@@ -49,10 +47,10 @@ const DownloadApp: React.FC<{
         >
           {bodycopy}
         </ModalBody>
-        {connector.defaultConnect && <OrDivider />}
+        {wallet?.id === 'walletConnect' && <OrDivider />}
       </ModalContent>
 
-      {connector.defaultConnect && ( // Open the default connector modal
+      {wallet?.id === 'walletConnect' && ( // Open the default connector modal
         <Button icon={<ExternalLinkIcon />}>Open Default Modal</Button>
       )}
     </PageContent>

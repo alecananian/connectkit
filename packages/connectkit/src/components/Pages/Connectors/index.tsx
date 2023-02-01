@@ -61,7 +61,7 @@ const Wallets: React.FC = () => {
       case 'metaMask':
         connector = new WalletConnectConnector({
           chains: c.chains,
-          options: { ...c.options, qrcode: false, version: '1' },
+          options: { ...c.options, qrcode: false },
         });
         break;
       case 'coinbaseWallet':

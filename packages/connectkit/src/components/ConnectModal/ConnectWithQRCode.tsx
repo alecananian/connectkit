@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { routes, useContext } from '../ConnectKit';
 
-import supportedConnectors from '../../constants/supportedConnectors';
 import { useConnect } from '../../hooks/useConnect';
+import useWallet from '../../hooks/useWallet';
 import { useDefaultWalletConnect } from '../../hooks/useDefaultWalletConnect';
-
-import { detectBrowser } from '../../utils';
 
 import {
   PageContent,
@@ -21,6 +19,8 @@ import ScanIconWithLogos from '../../assets/ScanIconWithLogos';
 import { ExternalLinkIcon } from '../../assets/icons';
 import CopyToClipboard from '../Common/CopyToClipboard';
 import useLocales from '../../hooks/useLocales';
+import { Connector } from 'wagmi';
+import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
 
 const ConnectWithQRCode: React.FC<{
   connectorId: string;
@@ -28,99 +28,29 @@ const ConnectWithQRCode: React.FC<{
 }> = ({ connectorId }) => {
   const context = useContext();
 
-  const [id, setId] = useState(connectorId);
-  const connector = supportedConnectors.filter((c) => c.id === id)[0];
+  const { openDefaultWalletConnect } = useDefaultWalletConnect();
+  const { wallet, state, connect, connectAsync } = useWallet(connectorId);
 
-  const { connectors, connectAsync } = useConnect();
   const [connectorUri, setConnectorUri] = useState<string | undefined>(
     undefined
   );
 
   const locales = useLocales({
-    CONNECTORNAME: connector.name,
+    CONNECTORNAME: wallet?.name,
   });
 
-  async function connectWallet(connector: any) {
-    const result = await connectAsync({ connector: connector });
-
-    if (result) {
-      return result;
-    }
-
-    return false;
-  }
-
-  async function connectWalletConnect(connector: any) {
-    if (connector.options?.version === '1') {
-      connector.on('message', async (e) => {
-        //@ts-ignore
-        const p = await connector.getProvider();
-        setConnectorUri(p.connector.uri);
-
-        // User rejected, regenerate QR code
-        p.connector.on('disconnect', () => {
-          connectWallet(connector);
-        });
-      });
-      try {
-        await connectWallet(connector);
-      } catch (err) {
-        context.debug(
-          <>WalletConnect cannot connect. See console for more details.</>,
-          err
-        );
-      }
-    } else {
-      connector.on('message', async (e) => {
-        const p = await connector.getProvider();
-        setConnectorUri(p.uri);
-        console.log(p.uri);
-
-        // User rejected, regenerate QR code
-        connector.on('disconnect', () => {
-          console.log('disconnect');
-        });
-        connector.on('error', () => {
-          console.log('disconnect');
-        });
-      });
-
-      try {
-        await connectWallet(connector);
-      } catch (error: any) {
-        if (error.code) {
-          switch (error.code) {
-            case 4001:
-              console.error('User rejected');
-              connectWalletConnect(connector); // Regenerate QR code
-              break;
-            default:
-              console.error('Unknown error');
-              break;
-          }
-        } else {
-          // Sometimes the error doesn't respond with a code
-          context.debug(
-            <>WalletConnect cannot connect. See console for more details.</>,
-            error
-          );
-        }
-      }
-    }
-  }
-
   const startConnect = async () => {
-    const c = connectors.filter((c) => c.id === id)[0];
-    if (!c || connectorUri) return;
+    const { connector } = wallet.createConnector();
+    console.log(connector);
 
-    switch (c.id) {
+    switch (wallet?.id) {
       case 'coinbaseWallet':
-        c.on('message', async (e) => {
-          const p = await c.getProvider();
+        connector.on('message', async ({ type }: any) => {
+          const p = await connector.getProvider();
           setConnectorUri(p.qrUrl);
         });
         try {
-          await connectWallet(c);
+          await connectAsync({ connector });
         } catch (err) {
           context.debug(
             <>
@@ -141,94 +71,117 @@ const ConnectWithQRCode: React.FC<{
         }
         break;
       case 'walletConnect':
-        connectWalletConnect(c);
+        if (connector.options?.version === '1') {
+          // WalletConnect v1
+          connector.on('message', async () => {
+            const p = await connector.getProvider();
+            setConnectorUri(p.connector.uri);
+
+            // User rejected, regenerate QR code
+            p.connector.on('disconnect', () => {
+              //TODO: Refresh QR Code
+              startConnect();
+            });
+          });
+          try {
+            await connectAsync({ connector });
+          } catch (err) {
+            context.debug(
+              <>WalletConnect cannot connect. See console for more details.</>,
+              err
+            );
+          }
+        } else {
+          // WalletConnect v2
+
+          const c: Connector = new WalletConnectConnector({
+            ...connector,
+          });
+          console.log(c);
+          c.on('connect', () => {
+            console.log(`Connected to ${c.name}`);
+          });
+          c.on('message', async ({ type, data }) => {
+            console.log(`Message from ${c.name}:`, type, data);
+            if (type === 'display_uri') {
+              setConnectorUri(data as string);
+            }
+          });
+          c.on('disconnect', () => {
+            console.log(`Disconnected from ${c.name}`);
+          });
+
+          console.log('Connecting...');
+          const connected = await connectAsync({ connector: c });
+          console.log('Connected', connected);
+          /*
+          try {
+            console.log(connect({ connector }));
+          } catch (err) {
+            context.debug(<>Unknown error</>, err);
+          }
+          */
+        }
         break;
     }
   };
 
+  // State for UI response to default wallet connect
   const [defaultModalOpen, setDefaultModalOpen] = useState(false);
-  const { openDefaultWalletConnect } = useDefaultWalletConnect();
   const openDefaultConnect = async () => {
-    const c = connectors.filter((c) => c.id === id)[0];
-    if (c.id === 'walletConnect') {
-      setDefaultModalOpen(true);
-      await openDefaultWalletConnect();
-      setDefaultModalOpen(false);
-    } else {
-    }
+    if (wallet?.id !== 'walletConnect') return;
+    setDefaultModalOpen(true);
+    await openDefaultWalletConnect();
+    setDefaultModalOpen(false);
   };
 
   useEffect(() => {
     if (!connectorUri) startConnect();
   }, []);
 
-  if (!connector) return <>Connector not found</>;
+  if (!wallet) return <>Connector not found</>;
+  const hasApps = wallet?.downloadUrls?.ios || wallet?.downloadUrls?.android;
 
-  const browser = detectBrowser();
-  const extensionUrl = connector.extensions
-    ? connector.extensions[browser]
-    : undefined;
-
-  const hasApps =
-    connector.appUrls && Object.keys(connector.appUrls).length !== 0;
-
-  const suggestedExtension = connector.extensions
-    ? {
-        name: Object.keys(connector.extensions)[0],
-        label:
-          Object.keys(connector.extensions)[0].charAt(0).toUpperCase() +
-          Object.keys(connector.extensions)[0].slice(1), // Capitalise first letter, but this might be better suited as a lookup table
-        url: connector.extensions[Object.keys(connector.extensions)[0]],
-      }
-    : undefined;
-
-  const hasExtensionInstalled =
-    connector.extensionIsInstalled && connector.extensionIsInstalled();
-
-  if (!connector.scannable)
+  if (!wallet?.scannable)
     return (
       <PageContent>
         <ModalHeading>Invalid State</ModalHeading>
         <ModalContent>
-          <Alert>
-            {connector.name} does not have it's own QR Code to scan. This state
-            should never happen
-          </Alert>
+          <Alert>{wallet?.name} does not have it's own QR Code to scan.</Alert>
         </ModalContent>
       </PageContent>
     );
 
-  const showAdditionalOptions = connector.defaultConnect;
-
   return (
     <PageContent>
       <ModalContent style={{ paddingBottom: 8, gap: 14 }}>
+        {state}
         <CustomQRCode
           value={connectorUri}
-          image={connector.logos.qrCode}
-          imageBackground={connector.logoBackground}
+          image={wallet?.logos.qrCode}
+          imageBackground={wallet?.logoBackground}
           tooltipMessage={
-            connectorId === 'walletConnect' ? (
+            wallet?.id === 'walletConnect' ? (
               <>
                 <ScanIconWithLogos />
                 <span>{locales.scanScreen_tooltip_walletConnect}</span>
               </>
             ) : (
               <>
-                <ScanIconWithLogos logo={connector.logos.connectorButton} />
+                <ScanIconWithLogos logo={wallet?.logos.connectorButton} />
                 <span>{locales.scanScreen_tooltip_default}</span>
               </>
             )
           }
         />
-        {showAdditionalOptions ? (
+        {wallet?.id === 'walletConnect' ? (
           <OrDivider />
         ) : (
           hasApps && <OrDivider>{locales.dontHaveTheApp}</OrDivider>
         )}
       </ModalContent>
 
-      {showAdditionalOptions && ( // for walletConnect
+      {wallet?.id === 'walletConnect' && ( // for walletConnect
         <div
           style={{
             display: 'flex',
@@ -258,54 +211,18 @@ const ConnectWithQRCode: React.FC<{
         </div>
       )}
 
-      {/*
-      {hasExtensionInstalled && ( // Run the extension
-        <Button
-          icon={connector.logos.default}
-          roundedIcon
-          onClick={() => switchConnectMethod(id)}
-        >
-          Open {connector.name}
-        </Button>
-      )}
-
-      {!hasExtensionInstalled && extensionUrl && (
-        <Button href={extensionUrl} icon={<BrowserIcon />}>
-          {locales.installTheExtension}
-        </Button>
-      )}
-      */}
-
       {hasApps && (
         <>
           <Button
             onClick={() => {
               context.setRoute(routes.DOWNLOAD);
             }}
-            /*
-            icon={
-              <div style={{ background: connector.logoBackground }}>
-                {connector.logos.default}
-              </div>
-            }
-            roundedIcon
-            */
             download
           >
             {locales.getWalletName}
           </Button>
         </>
       )}
-      {/*
-        {suggestedExtension && (
-          <Button
-            href={suggestedExtension?.url}
-            icon={<BrowserIcon browser={suggestedExtension?.name} />}
-          >
-            Install on {suggestedExtension?.label}
-          </Button>
-        }
-        */}
     </PageContent>
   );
 };

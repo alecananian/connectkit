@@ -1,34 +1,28 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useState } from 'react';
-import supportedConnectors from './../../constants/supportedConnectors';
 
 import { contentVariants } from '../Common/Modal';
 
 import ConnectWithInjector from './ConnectWithInjector';
 import ConnectWithQRCode from './ConnectWithQRCode';
 
-import Alert from '../Common/Alert';
+import useWallet from '../../hooks/useWallet';
 
 const states = {
   QRCODE: 'qrcode',
   INJECTOR: 'injector',
 };
 const ConnectUsing: React.FC<{ connectorId: string }> = ({ connectorId }) => {
-  const [id, setId] = useState<string>(connectorId);
-
-  const connector = supportedConnectors.filter((c) => c.id === id)[0];
-
-  const hasExtensionInstalled =
-    connector.extensionIsInstalled && connector.extensionIsInstalled();
+  const { wallet } = useWallet(connectorId);
+  const id = wallet?.id ?? connectorId;
 
   // If cannot be scanned, display injector flow, which if extension is not installed will show CTA to install it
-  const useInjector = !connector.scannable || hasExtensionInstalled;
+  const useInjector = !wallet?.scannable || wallet?.installed;
 
   const [status, setStatus] = useState(
     useInjector ? states.INJECTOR : states.QRCODE
   );
 
-  if (!connector) return <Alert>Connector not found</Alert>;
   return (
     <AnimatePresence>
       {status === states.QRCODE && (
@@ -42,7 +36,7 @@ const ConnectUsing: React.FC<{ connectorId: string }> = ({ connectorId }) => {
           <ConnectWithQRCode
             connectorId={id}
             switchConnectMethod={(id?: string) => {
-              if (id) setId(id);
+              //if (id) setId(id);
               setStatus(states.INJECTOR);
             }}
           />
@@ -59,7 +53,7 @@ const ConnectUsing: React.FC<{ connectorId: string }> = ({ connectorId }) => {
           <ConnectWithInjector
             connectorId={id}
             switchConnectMethod={(id?: string) => {
-              if (id) setId(id);
+              //if (id) setId(id);
               setStatus(states.QRCODE);
             }}
           />

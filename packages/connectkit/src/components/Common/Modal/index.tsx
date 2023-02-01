@@ -42,6 +42,7 @@ import { AuthIcon } from '../../../assets/icons';
 import { useSIWE } from '../../..';
 import useLocales from '../../../hooks/useLocales';
 import FitText from '../FitText';
+import useWallet from '../../../hooks/useWallet';
 
 const ProfileIcon = ({ signedIn }: { signedIn?: boolean }) => (
   <div style={{ position: 'relative' }}>
@@ -209,9 +210,10 @@ const Modal: React.FC<ModalProps> = ({
   const mobile = isMobile();
   const { signedIn } = useSIWE();
 
-  const connector = supportedConnectors.find((x) => x.id === context.connector);
+  const { wallet } = useWallet(context.connector);
+
   const locales = useLocales({
-    CONNECTORNAME: connector?.name,
+    CONNECTORNAME: wallet?.name,
   });
 
   const [state, setOpen] = useTransition({
@@ -311,13 +313,9 @@ const Modal: React.FC<ModalProps> = ({
   } as React.CSSProperties;
 
   function shouldUseQrcode() {
-    const c = supportedConnectors.filter((x) => x.id === context.connector)[0];
-    if (!c) return false; // Fail states are shown in the injector flow
+    if (!wallet) return false; // Fail states are shown in the injector flow
 
-    const hasExtensionInstalled =
-      c.extensionIsInstalled && c.extensionIsInstalled();
-
-    const useInjector = !c.scannable || hasExtensionInstalled;
+    const useInjector = !wallet.scannable || wallet.installed;
     return !useInjector;
   }
 
@@ -326,12 +324,13 @@ const Modal: React.FC<ModalProps> = ({
       case routes.ABOUT:
         return locales.aboutScreen_heading;
       case routes.CONNECT:
+        if (!wallet) return locales.connectScreen_heading;
         if (shouldUseQrcode()) {
-          return connector?.id === 'walletConnect'
+          return wallet?.id === 'walletConnect'
             ? locales.scanScreen_heading
             : locales.scanScreen_heading_withConnector;
         } else {
-          return connector?.name;
+          return wallet?.name;
         }
       case routes.CONNECTORS:
         return locales.connectorsScreen_heading;
@@ -554,7 +553,7 @@ const Modal: React.FC<ModalProps> = ({
                     //alignItems: 'center',
                     justifyContent: 'center',
                   }}
-                  key={`${context.route}-${signedIn ? 'signedIn' : ''}`}
+                  key={`${context.route}-${!!signedIn ? 'signedIn' : ''}`}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}

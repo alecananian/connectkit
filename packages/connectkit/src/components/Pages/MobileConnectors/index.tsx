@@ -44,9 +44,11 @@ const MobileConnectors: React.FC = () => {
   const chains = getGlobalChains();
 
   const { openDefaultWalletConnect } = useDefaultWalletConnect();
-  const wallets = useDefaultWallets().filter(
-    (wallet: WalletProps) => wallet.installed === undefined // Do not show wallets that are injected connectors
-  );
+  const wallets = useDefaultWallets()
+    .filter(
+      (wallet: WalletProps) => wallet.installed === undefined // Do not show wallets that are injected connectors
+    )
+    .filter((wallet: WalletProps) => wallet.id !== 'walletConnect');
 
   const connectWallet = (wallet: WalletProps) => {
     const c = wallet.createConnector();
