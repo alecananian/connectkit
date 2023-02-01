@@ -70,34 +70,15 @@ export const metaMask = ({ chains }: WalletOptions): WalletProps => {
 
       return {
         connector,
-        getUri: async () => {},
-        getMobileConnector: shouldUseWalletConnect
-          ? async () => {
-              connector.on('error', (err) => {
-                console.log('onError', err);
-              });
-              connector.on('message', async ({ type }) => {
-                console.log('onMessage: MetaMask', type);
-                if (type === 'connecting') {
-                  let uriString = '';
-                  try {
-                    const uri = await getProviderUri(connector);
-                    uriString = isAndroid()
-                      ? uri
-                      : `https://metamask.app.link/wc?uri=${encodeURIComponent(
-                          uri
-                        )}`;
+        mobile: {
+          getUri: async () => {
+            const uri = await getProviderUri(connector);
 
-                    window.location.href = uriString;
-                  } catch {
-                    console.log('catch bad URI', uriString);
-                  }
-                }
-              });
-
-              return connector;
-            }
-          : undefined,
+            return isAndroid()
+              ? uri
+              : `https://metamask.app.link/wc?uri=${encodeURIComponent(uri)}`;
+          },
+        },
       };
     },
   };

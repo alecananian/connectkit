@@ -1,9 +1,10 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Chain } from 'wagmi';
 import { walletConnect } from './connectors/walletConnect';
 import { metaMask } from './connectors/metaMask';
 import { coinbaseWallet } from './connectors/coinbaseWallet';
-import { WalletConnectConnector } from '@wagmi/core/connectors/walletConnect';
+import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
+import { useConnect } from '../hooks/useConnect';
 
 export type WalletOptions = {
   chains: Chain[];
@@ -45,14 +46,36 @@ export const getDefaultConnectors = (chains: Chain[], appName: string) => {
   });
 };
 
+export const useDefaultWalletConnectConnector = () => {
+  const { connectors } = useConnect();
+  const c: any = connectors.find((c: any) => c.id === 'walletConnect');
+
+  const [uri, setUri] = useState<string | undefined>(undefined);
+
+  const connector = new WalletConnectConnector({ ...c });
+
+  useEffect(() => {
+    connector.on('message', (message: any) => {
+      console.log('message', message);
+      if (message.type === 'display_uri') setUri(message.data);
+    });
+  }, []);
+
+  return { connector, uri };
+};
+
 export const getDefaultWalletConnectConnector = (chains: Chain[]) => {
-  return new WalletConnectConnector({
+  // TODO: walletConnect 2.0 requires projectId
+  //const { connectors } = useConnect();
+  //const connector = connectors.find((c: any) => c.id === 'walletConnect');
+  const connector = new WalletConnectConnector({
     chains,
     options: {
+      //...connector?.options,
       qrcode: false,
-      version: '1',
     },
   });
+  return connector;
 };
 
 export const getProviderUri = async (connector: any) => {
