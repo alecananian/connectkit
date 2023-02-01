@@ -155,7 +155,6 @@ const ConnectWithQRCode: React.FC<{
   return (
     <PageContent>
       <ModalContent style={{ paddingBottom: 8, gap: 14 }}>
-        {state}
         <CustomQRCode
           value={connectorUri}
           image={wallet?.logos.qrCode}
