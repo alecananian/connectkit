@@ -19,7 +19,7 @@ import defaultTheme from '../styles/defaultTheme';
 import ConnectKitModal from '../components/ConnectModal';
 import { ThemeProvider } from 'styled-components';
 import { useThemeFont } from '../hooks/useGoogleFont';
-import { useAccount, useNetwork } from 'wagmi';
+import { useAccount, useNetwork, useConnect } from 'wagmi';
 import { SIWEContext } from './Standard/SIWE/SIWEContext';
 import { getGlobalChains } from '../defaultClient';
 
@@ -118,7 +118,7 @@ export const ConnectKitProvider: React.FC<ConnectKitProviderProps> = ({
     disclaimer: null,
     bufferPolyfill: true,
     customAvatar: undefined,
-    initialChainId: getGlobalChains()[0]?.id,
+    initialChainId: getGlobalChains()?.[0]?.id,
     ethereumOnboardingUrl: undefined,
     walletOnboardingUrl: undefined,
   };
